@@ -1,0 +1,267 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
+local Player = Players.LocalPlayer
+local Character = Player.Character or Player.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local RootPart = Character:WaitForChild("HumanoidRootPart")
+
+-- ===== CONFIG =====
+local Settings = {
+    Noclip = true,
+    Fly = false,
+    AutoCollect = true,
+    AutoFarm = true,
+    CollectRadius = 50,
+    FlySpeed = 50,
+    Visible = true
+}
+
+-- ===== FLY VARIABLES =====
+local flying = false
+local flySpeed = 50
+local bodyVelocity = nil
+local bodyGyro = nil
+
+-- ===== CREATE UI (Rayfield Style - Touch Optimized) =====
+local function CreateUI()
+    -- ลบ UI เดิมถ้ามี
+    if Player.PlayerGui:FindFirstChild("LuckyBlockUI") then
+        Player.PlayerGui.LuckyBlockUI:Destroy()
+    end
+    
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "LuckyBlockUI"
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.Parent = Player.PlayerGui
+
+    -- Main Frame
+    local MainFrame = Instance.new("Frame")
+    MainFrame.Size = UDim2.new(0, 360, 0, 480)
+    MainFrame.Position = UDim2.new(0.5, -180, 0.5, -240)
+    MainFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 35)
+    MainFrame.BackgroundTransparency = 0.05
+    MainFrame.BorderSizePixel = 2
+    MainFrame.BorderColor3 = Color3.fromRGB(255, 215, 0)
+    MainFrame.ClipsDescendants = true
+    MainFrame.Parent = ScreenGui
+
+    -- Glass Effect (Rayfield Style)
+    local Glass = Instance.new("Frame")
+    Glass.Size = UDim2.new(1, 0, 1, 0)
+    Glass.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Glass.BackgroundTransparency = 0.92
+    Glass.Parent = MainFrame
+
+    -- Title
+    local Title = Instance.new("TextLabel")
+    Title.Size = UDim2.new(1, 0, 0, 55)
+    Title.Position = UDim2.new(0, 0, 0, 0)
+    Title.BackgroundColor3 = Color3.fromRGB(255, 215, 0)
+    Title.BackgroundTransparency = 0.2
+    Title.Text = "🎲 LUCKY FARM PRO 🎲"
+    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Title.TextScaled = true
+    Title.Font = Enum.Font.GothamBold
+    Title.Parent = MainFrame
+
+    -- Subtitle
+    local SubTitle = Instance.new("TextLabel")
+    SubTitle.Size = UDim2.new(1, 0, 0, 25)
+    SubTitle.Position = UDim2.new(0, 0, 0.11, 0)
+    SubTitle.BackgroundTransparency = 1
+    SubTitle.Text = "⚡ iOS Touch Optimized ⚡"
+    SubTitle.TextColor3 = Color3.fromRGB(200, 200, 255)
+    SubTitle.TextScaled = true
+    SubTitle.Font = Enum.Font.Gotham
+    SubTitle.Parent = MainFrame
+
+    -- ===== BUTTON 1: NOCLIP =====
+    local NoclipBtn = Instance.new("TextButton")
+    NoclipBtn.Size = UDim2.new(0.9, 0, 0, 45)
+    NoclipBtn.Position = UDim2.new(0.05, 0, 0.19, 0)
+    NoclipBtn.BackgroundColor3 = Settings.Noclip and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(200, 50, 50)
+    NoclipBtn.Text = "🌀 Noclip: " .. (Settings.Noclip and "ON" or "OFF")
+    NoclipBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    NoclipBtn.TextScaled = true
+    NoclipBtn.Font = Enum.Font.Gotham
+    NoclipBtn.Parent = MainFrame
+
+    NoclipBtn.MouseButton1Click:Connect(function()
+        Settings.Noclip = not Settings.Noclip
+        NoclipBtn.BackgroundColor3 = Settings.Noclip and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(200, 50, 50)
+        NoclipBtn.Text = "🌀 Noclip: " .. (Settings.Noclip and "ON" or "OFF")
+        Player:Print("Noclip: " .. tostring(Settings.Noclip))
+    end)
+
+    -- ===== BUTTON 2: FLY =====
+    local FlyBtn = Instance.new("TextButton")
+    FlyBtn.Size = UDim2.new(0.9, 0, 0, 45)
+    FlyBtn.Position = UDim2.new(0.05, 0, 0.32, 0)
+    FlyBtn.BackgroundColor3 = Settings.Fly and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(200, 50, 50)
+    FlyBtn.Text = "✈️ Fly: " .. (Settings.Fly and "ON" or "OFF")
+    FlyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    FlyBtn.TextScaled = true
+    FlyBtn.Font = Enum.Font.Gotham
+    FlyBtn.Parent = MainFrame
+
+    FlyBtn.MouseButton1Click:Connect(function()
+        Settings.Fly = not Settings.Fly
+        FlyBtn.BackgroundColor3 = Settings.Fly and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(200, 50, 50)
+        FlyBtn.Text = "✈️ Fly: " .. (Settings.Fly and "ON" or "OFF")
+        Player:Print("Fly: " .. tostring(Settings.Fly))
+        
+        if Settings.Fly then
+            EnableFly()
+        else
+            DisableFly()
+        end
+    end)
+
+    -- ===== BUTTON 3: AUTO COLLECT =====
+    local CollectBtn = Instance.new("TextButton")
+    CollectBtn.Size = UDim2.new(0.9, 0, 0, 45)
+    CollectBtn.Position = UDim2.new(0.05, 0, 0.45, 0)
+    CollectBtn.BackgroundColor3 = Settings.AutoCollect and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(200, 50, 50)
+    CollectBtn.Text = "📦 Auto Collect: " .. (Settings.AutoCollect and "ON" or "OFF")
+    CollectBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    CollectBtn.TextScaled = true
+    CollectBtn.Font = Enum.Font.Gotham
+    CollectBtn.Parent = MainFrame
+
+    CollectBtn.MouseButton1Click:Connect(function()
+        Settings.AutoCollect = not Settings.AutoCollect
+        CollectBtn.BackgroundColor3 = Settings.AutoCollect and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(200, 50, 50)
+        CollectBtn.Text = "📦 Auto Collect: " .. (Settings.AutoCollect and "ON" or "OFF")
+        Player:Print("Auto Collect: " .. tostring(Settings.AutoCollect))
+    end)
+
+    -- ===== BUTTON 4: AUTO FARM =====
+    local FarmBtn = Instance.new("TextButton")
+    FarmBtn.Size = UDim2.new(0.9, 0, 0, 45)
+    FarmBtn.Position = UDim2.new(0.05, 0, 0.58, 0)
+    FarmBtn.BackgroundColor3 = Settings.AutoFarm and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(200, 50, 50)
+    FarmBtn.Text = "🌾 Auto Farm: " .. (Settings.AutoFarm and "ON" or "OFF")
+    FarmBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    FarmBtn.TextScaled = true
+    FarmBtn.Font = Enum.Font.Gotham
+    FarmBtn.Parent = MainFrame
+
+    FarmBtn.MouseButton1Click:Connect(function()
+        Settings.AutoFarm = not Settings.AutoFarm
+        FarmBtn.BackgroundColor3 = Settings.AutoFarm and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(200, 50, 50)
+        FarmBtn.Text = "🌾 Auto Farm: " .. (Settings.AutoFarm and "ON" or "OFF")
+        Player:Print("Auto Farm: " .. tostring(Settings.AutoFarm))
+    end)
+
+    -- ===== RADIUS SLIDER =====
+    local RadiusLabel = Instance.new("TextLabel")
+    RadiusLabel.Size = UDim2.new(0.5, 0, 0, 25)
+    RadiusLabel.Position = UDim2.new(0.05, 0, 0.71, 0)
+    RadiusLabel.BackgroundTransparency = 1
+    RadiusLabel.Text = "📏 Radius: " .. Settings.CollectRadius
+    RadiusLabel.TextColor3 = Color3.fromRGB(200, 200, 255)
+    RadiusLabel.TextScaled = true
+    RadiusLabel.Font = Enum.Font.Gotham
+    RadiusLabel.Parent = MainFrame
+
+    local RadiusSlider = Instance.new("TextBox")
+    RadiusSlider.Size = UDim2.new(0.4, 0, 0, 30)
+    RadiusSlider.Position = UDim2.new(0.55, 0, 0.70, 0)
+    RadiusSlider.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+    RadiusSlider.Text = tostring(Settings.CollectRadius)
+    RadiusSlider.TextColor3 = Color3.fromRGB(255, 255, 255)
+    RadiusSlider.TextScaled = true
+    RadiusSlider.Font = Enum.Font.Gotham
+    RadiusSlider.PlaceholderText = "10-200"
+    RadiusSlider.Parent = MainFrame
+
+    RadiusSlider.FocusLost:Connect(function()
+        local num = tonumber(RadiusSlider.Text)
+        if num and num > 0 and num <= 200 then
+            Settings.CollectRadius = num
+            RadiusLabel.Text = "📏 Radius: " .. Settings.CollectRadius
+        else
+            RadiusSlider.Text = tostring(Settings.CollectRadius)
+        end
+    end)
+
+    -- ===== CLOSE BUTTON =====
+    local CloseBtn = Instance.new("TextButton")
+    CloseBtn.Size = UDim2.new(0.9, 0, 0, 40)
+    CloseBtn.Position = UDim2.new(0.05, 0, 0.85, 0)
+    CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    CloseBtn.Text = "✕ CLOSE UI"
+    CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    CloseBtn.TextScaled = true
+    CloseBtn.Font = Enum.Font.GothamBold
+    CloseBtn.Parent = MainFrame
+
+    CloseBtn.MouseButton1Click:Connect(function()
+        ScreenGui:Destroy()
+        Settings.Visible = false
+    end)
+
+    -- ===== OPEN UI WITH F3 (สำหรับคีย์บอร์ด) =====
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if input.KeyCode == Enum.KeyCode.F3 then
+            if ScreenGui.Parent then
+                ScreenGui:Destroy()
+                Settings.Visible = false
+            else
+                CreateUI()
+            end
+        end
+    end)
+
+    return ScreenGui
+end
+
+-- ===== FLY FUNCTIONS =====
+function EnableFly()
+    local char = Player.Character
+    if not char then return end
+    local rootPart = char:FindFirstChild("HumanoidRootPart")
+    local humanoid = char:FindFirstChild("Humanoid")
+    if not rootPart or not humanoid then return end
+    
+    flying = true
+    
+    -- สร้าง BodyVelocity
+    bodyVelocity = Instance.new("BodyVelocity")
+    bodyVelocity.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+    bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+    bodyVelocity.Parent = rootPart
+    
+    -- สร้าง BodyGyro (ควบคุมทิศทาง)
+    bodyGyro = Instance.new("BodyGyro")
+    bodyGyro.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+    bodyGyro.CFrame = rootPart.CFrame
+    bodyGyro.Parent = rootPart
+    
+    humanoid.PlatformStand = true
+end
+
+function DisableFly()
+    flying = false
+    
+    if bodyVelocity then
+        bodyVelocity:Destroy()
+        bodyVelocity = nil
+    end
+    if bodyGyro then
+        bodyGyro:Destroy()
+        bodyGyro = nil
+    end
+    
+    local char = Player.Character
+    if char and char:FindFirstChild("Humanoid") then
+        char.Humanoid.PlatformStand = false
+    end
+end
+
+-- ===== FLY CONTROL (Touch + Keyboard) =====
+UserI
